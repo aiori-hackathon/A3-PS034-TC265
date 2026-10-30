@@ -1,0 +1,3 @@
+# Python dependencies (Standard library used for core server)
+# Optional WSGI server if deploying as Python Web Service:
+# gunicorn>=21.2.0

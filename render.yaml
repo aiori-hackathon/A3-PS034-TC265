@@ -1,0 +1,21 @@
+# Render Blueprint for Schema-Validated YANG-Push Telemetry Pipeline
+# Documentation: https://render.com/docs/blueprint-spec
+
+services:
+  # Option 1: Static Site (Recommended: 100% Free, 24/7 Global CDN, Never sleeps, zero cold starts)
+  - type: web
+    name: yang-telemetry-pipeline
+    runtime: static
+    buildCommand: echo "Building YANG Telemetry Pipeline..."
+    staticPublishPath: .
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: Access-Control-Allow-Origin
+        value: "*"
+      - path: /*
+        name: X-Frame-Options
+        value: "SAMEORIGIN"

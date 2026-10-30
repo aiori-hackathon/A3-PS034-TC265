@@ -1,0 +1,2407 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Axiom YANG — Schema-Validated Telemetry Pipeline</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  
+  <!-- React 18 & ReactDOM with Multi-CDN Resilient Fallbacks -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script>window.React || document.write('<script src="https://unpkg.com/react@18/umd/react.production.min.js"><\/script>')</script>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script>window.ReactDOM || document.write('<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"><\/script>')</script>
+  
+  <!-- Babel Standalone for in-browser JSX compilation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.10/babel.min.js"></script>
+  <script>window.Babel || document.write('<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>')</script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            cisco: {
+              navy: '#000000',
+              surface: '#080E1C',
+              card: '#0C152B',
+              cardHover: '#121E3D',
+              border: '#1C2F65',
+              cyan: '#00D2FF',
+              blue: '#0070BA',
+              accent: '#38BDF8',
+              glow: 'rgba(0, 210, 255, 0.15)'
+            }
+          }
+        }
+      }
+    };
+
+    // Diagnostic error logger so black screens never happen silently
+    window.addEventListener('error', function(e) {
+      console.error("Pipeline Runtime Error:", e);
+      var root = document.getElementById('root');
+      if (root && root.getAttribute('data-mounted') !== 'true') {
+        root.innerHTML = '<div style="padding: 40px; color: #f43f5e; font-family: monospace; background: #060b14; min-height: 100vh;">' +
+          '<h2 style="color: #fff; margin-bottom: 8px;">Telemetry Application Notice</h2>' +
+          '<p style="color: #94a3b8; margin-bottom: 16px;">Component initialization error detected:</p>' +
+          '<pre style="background: #0f1c3f; border: 1px solid #1c2f65; padding: 16px; border-radius: 8px; color: #f87171;">' + (e.message || e.toString()) + '</pre>' +
+          '</div>';
+      }
+    });
+  </script>
+
+  <style>
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #060B14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1C2F65;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #0070BA;
+    }
+    .telemetry-grid {
+      background-size: 36px 36px;
+      background-image: 
+        linear-gradient(to right, rgba(28, 47, 101, 0.25) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(28, 47, 101, 0.25) 1px, transparent 1px);
+    }
+    .circuit-glow {
+      background: radial-gradient(circle at 50% 0%, rgba(0, 210, 255, 0.12) 0%, rgba(6, 11, 20, 0) 70%);
+    }
+    @keyframes spinPulse {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="bg-black text-slate-200 font-sans antialiased selection:bg-cyan-500/20 selection:text-cyan-300 min-h-screen">
+  <div id="root">
+    <!-- Initial Loading State -->
+    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #060B14; color: #00D2FF; font-family: monospace; font-size: 13px;">
+      <div style="text-align: center;">
+        <div style="width: 36px; height: 36px; border: 3px solid #1C2F65; border-top-color: #00D2FF; border-radius: 50%; animation: spinPulse 1s linear infinite; margin: 0 auto 16px;"></div>
+        <div style="font-weight: bold; letter-spacing: 0.05em;">SYNAPSE.YANG TELEMETRY ENGINE</div>
+        <div style="color: #64748b; font-size: 11px; margin-top: 6px;">Initializing RFC 8641 Schema Validation Core...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- React Application Source Code -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef, createContext, useContext } = React;
+
+    // --- Native Pure-React SVG Icon Component (Zero DOM mutation errors) ---
+    function Icon({ name, className = "w-4 h-4" }) {
+      const paths = {
+        "activity": <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+        "share-2": <g><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></g>,
+        "globe": <g><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></g>,
+        "smartphone": <g><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></g>,
+        "menu": <g><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></g>,
+        "copy": <g><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></g>,
+                "mail": <g><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></g>,
+        "lock": <g><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></g>,
+        "user": <g><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></g>,
+        "key": <g><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></g>,
+        "log-out": <g><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></g>,
+        "eye": <g><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></g>,
+        "eye-off": <g><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></g>,
+        "shield": <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>,
+        "layout-dashboard": <g><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></g>,
+        "shield-check": <g><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></g>,
+        "server": <g><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></g>,
+        "alert-triangle": <g><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></g>,
+        "git-merge": <g><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></g>,
+        "bar-chart-3": <g><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></g>,
+        "book-open": <g><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></g>,
+        "book": <g><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></g>,
+        "download": <g><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></g>,
+        "zap": <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />,
+        "sparkles": <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>,
+        "refresh-cw": <g><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></g>,
+        "check-circle": <g><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></g>,
+        "alert-octagon": <g><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></g>,
+        "check": <polyline points="20 6 9 17 4 12"/>,
+        "terminal": <g><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></g>,
+        "brain-circuit": <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>,
+        "search": <g><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></g>,
+        "code": <g><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></g>,
+        "bug": <g><rect width="8" height="14" x="8" y="6" rx="4"/><path d="m19 7-3 2"/><path d="m5 7 3 2"/><path d="m19 19-3-2"/><path d="m5 19 3-2"/><path d="M20 13h-4"/><path d="M4 13h4"/><path d="m10 4 1 2"/><path d="m14 4-1 2"/></g>,
+        "wifi": <g><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/></g>,
+        "radio": <g><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></g>,
+        "arrow-right": <g><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></g>,
+        "x": <g><path d="M18 6 6 18"/><path d="m6 6 12 12"/></g>,
+        "home": <g><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></g>,
+        "play": <polygon points="6 3 20 12 6 21 6 3"/>,
+        "file-code": <g><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><polyline points="14 2 14 8 20 8"/><path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/></g>,
+        "shield-alert": <g><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></g>
+      };
+
+      return (
+        <svg 
+          className={className} 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2" 
+          strokeLinecap="round" 
+          strokeLinejoin="round">
+          {paths[name] || <circle cx="12" cy="12" r="10" />}
+        </svg>
+      );
+    }
+
+    // --- Initial Model & Device Data ---
+    const INITIAL_DEVICES = [
+      {
+        device_id: "Router-01",
+        vendor: "Cisco ASR 9904",
+        ip: "10.100.1.1",
+        role: "Core WAN Router",
+        status: "Online",
+        health: 98,
+        uptime: "142d 18h",
+        sub_type: "Periodic (1s)",
+        sub_id: "SUB-YANG-8641-001",
+        interface: "GigabitEthernet0/0/0/1",
+        location: "Equinix DC1 - San Jose"
+      },
+      {
+        device_id: "Router-02",
+        vendor: "Juniper MX480",
+        ip: "10.100.1.2",
+        role: "Edge Gateway",
+        status: "Online",
+        health: 94,
+        uptime: "89d 04h",
+        sub_type: "On-Change",
+        sub_id: "SUB-YANG-8641-002",
+        interface: "xe-0/1/0",
+        location: "Interxion FRA1 - Frankfurt"
+      },
+      {
+        device_id: "Switch-01",
+        vendor: "Arista 7280R3",
+        ip: "10.200.2.1",
+        role: "Spine Fabric Switch",
+        status: "Online",
+        health: 99,
+        uptime: "210d 12h",
+        sub_type: "Periodic (2s)",
+        sub_id: "SUB-YANG-8641-003",
+        interface: "Ethernet1/1",
+        location: "Core Pod-A Spine"
+      },
+      {
+        device_id: "Switch-02",
+        vendor: "Cisco Nexus 9300",
+        ip: "10.200.2.2",
+        role: "Leaf Top-of-Rack",
+        status: "Degraded",
+        health: 74,
+        uptime: "34d 06h",
+        sub_type: "Periodic (2s)",
+        sub_id: "SUB-YANG-8641-004",
+        interface: "Ethernet1/2",
+        location: "Rack B-08 Leaf"
+      }
+    ];
+
+    const SCHEMA_DEFINITION = {
+      "$schema": "urn:ietf:params:xml:ns:yang:ietf-interfaces",
+      "model": "RFC 8641 YANG-Push Datastore Subscription",
+      "properties": {
+        "device_id": { "type": "string", "description": "Canonical network element identifier", "required": true },
+        "cpu": { "type": "number", "minimum": 0, "maximum": 100, "unit": "%", "required": true },
+        "memory": { "type": "number", "minimum": 0, "maximum": 100, "unit": "%", "required": true },
+        "bandwidth": { "type": "number", "minimum": 0, "unit": "Mbps", "required": true },
+        "packet_loss": { "type": "number", "minimum": 0, "maximum": 100, "unit": "%", "required": false },
+        "latency": { "type": "number", "minimum": 0, "unit": "ms", "required": false },
+        "interface": { "type": "string", "description": "Physical interface identifier", "required": false },
+        "timestamp": { "type": "datetime", "format": "ISO 8601 (UTC)", "required": true }
+      }
+    };
+
+    // --- State Context ---
+    const AppContext = createContext();
+
+    function AppProvider({ children }) {
+      const [isAuthenticated, setIsAuthenticated] = useState(false);
+      const [currentUser, setCurrentUser] = useState(null);
+      const [role, setRole] = useState("Admin");
+      const [activePage, setActivePage] = useState("home");
+      const [isGeneratorActive, setIsGeneratorActive] = useState(true);
+      const [generatorInterval, setGeneratorInterval] = useState(2000);
+      const [devices, setDevices] = useState(INITIAL_DEVICES);
+      const [validStream, setValidStream] = useState([]);
+      const [invalidStream, setInvalidStream] = useState([]);
+      const [alerts, setAlerts] = useState([]);
+      const [toasts, setToasts] = useState([]);
+      const [showAiModal, setShowAiModal] = useState(false);
+      const [showShareModal, setShowShareModal] = useState(false);
+      const [selectedAnomaly, setSelectedAnomaly] = useState(null);
+
+      const login = (email, password, selectedRole, customName) => {
+        const nameMap = {
+          "Admin": "Alex Rivera (NOC Lead)",
+          "Engineer": "Jordan Chen (Telemetry Eng)",
+          "Viewer": "Taylor Vance (Compliance Auditor)"
+        };
+        const userName = customName || nameMap[selectedRole] || email.split("@")[0] || "NOC Operator";
+        const userObj = {
+          name: userName,
+          email: email || `${selectedRole.toLowerCase()}@noc.cisco.com`,
+          role: selectedRole,
+          loginTime: new Date().toLocaleTimeString()
+        };
+        setCurrentUser(userObj);
+        setRole(selectedRole);
+        setIsAuthenticated(true);
+        addToast("success", "Access Granted", `Authenticated as ${userName} [${selectedRole} Mode]`);
+      };
+
+      const logout = () => {
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        addToast("info", "Session Terminated", "Signed out of Telemetry Pipeline terminal.");
+      };
+
+      const addToast = (type, title, message) => {
+        const id = Date.now() + Math.random();
+        setToasts(prev => [{ id, type, title, message }, ...prev.slice(0, 4)]);
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, 5000);
+      };
+
+      const validatePacket = (pkt) => {
+        const errors = [];
+        if (!pkt || typeof pkt !== 'object') {
+          return { isValid: false, errors: ["Payload must be a valid JSON object"] };
+        }
+
+        if (!pkt.device_id || typeof pkt.device_id !== 'string') {
+          errors.push(typeof pkt.device_id === 'undefined' ? "Missing required field: 'device_id'" : "Wrong data type: 'device_id' must be a string");
+        }
+        if (typeof pkt.cpu !== 'number' || isNaN(pkt.cpu)) {
+          errors.push(typeof pkt.cpu === 'undefined' ? "Missing required field: 'cpu'" : `Wrong data type for 'cpu': expected number, got ${typeof pkt.cpu}`);
+        } else if (pkt.cpu < 0 || pkt.cpu > 100) {
+          errors.push(`Range violation: 'cpu' must be between 0 and 100, got ${pkt.cpu}`);
+        }
+
+        if (typeof pkt.memory !== 'number' || isNaN(pkt.memory)) {
+          errors.push(typeof pkt.memory === 'undefined' ? "Missing required field: 'memory'" : `Wrong data type for 'memory': expected number, got ${typeof pkt.memory}`);
+        }
+
+        if (typeof pkt.bandwidth !== 'number' || isNaN(pkt.bandwidth)) {
+          errors.push(typeof pkt.bandwidth === 'undefined' ? "Missing required field: 'bandwidth'" : `Wrong data type for 'bandwidth': expected number, got ${typeof pkt.bandwidth}`);
+        }
+
+        if (!pkt.timestamp || typeof pkt.timestamp !== 'string') {
+          errors.push("Missing required field: 'timestamp'");
+        } else {
+          const d = new Date(pkt.timestamp);
+          if (isNaN(d.getTime())) {
+            errors.push(`Timestamp Error: '${pkt.timestamp}' is not valid ISO 8601 UTC`);
+          }
+        }
+
+        const allowedKeys = ["device_id", "cpu", "memory", "bandwidth", "packet_loss", "latency", "interface", "timestamp"];
+        const extraKeys = Object.keys(pkt).filter(k => !allowedKeys.includes(k));
+        if (extraKeys.length > 0) {
+          errors.push(`Schema Drift Detected: Unexpected leaves [${extraKeys.join(', ')}] not declared in YANG module`);
+        }
+
+        return { isValid: errors.length === 0, errors };
+      };
+
+      const generatePacket = (forcedErrorType = null) => {
+        const dev = devices[Math.floor(Math.random() * devices.length)];
+        const nowIso = new Date().toISOString();
+
+        let cpu = Math.floor(25 + Math.random() * 45);
+        let mem = Math.floor(45 + Math.random() * 35);
+        let bw = Math.floor(200 + Math.random() * 700);
+        let loss = Number((Math.random() * 0.8).toFixed(2));
+        let lat = Number((8 + Math.random() * 25).toFixed(1));
+
+        if (Math.random() < 0.15) {
+          cpu = Math.floor(82 + Math.random() * 16);
+        }
+        if (Math.random() < 0.1) {
+          lat = Number((105 + Math.random() * 65).toFixed(1));
+        }
+
+        let rawPayload = {
+          device_id: dev.device_id,
+          cpu,
+          memory: mem,
+          bandwidth: bw,
+          packet_loss: loss,
+          latency: lat,
+          interface: dev.interface,
+          timestamp: nowIso
+        };
+
+        const shouldCorrupt = forcedErrorType || (Math.random() < 0.20);
+        if (shouldCorrupt) {
+          const errKind = forcedErrorType || ['type_cpu', 'missing_id', 'drift', 'bad_ts'][Math.floor(Math.random() * 4)];
+          if (errKind === 'type_cpu') {
+            rawPayload.cpu = "high_utilization";
+          } else if (errKind === 'missing_id') {
+            delete rawPayload.device_id;
+          } else if (errKind === 'drift') {
+            rawPayload["vendor_undocumented_optics_flag"] = "0x88FE";
+          } else if (errKind === 'bad_ts') {
+            rawPayload.timestamp = "TIMESTAMP_CORRUPTED_2026";
+          }
+        }
+
+        const { isValid, errors } = validatePacket(rawPayload);
+        const record = {
+          id: `PKT-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 900 + 100)}`,
+          payload: rawPayload,
+          isValid,
+          errors,
+          received_at: nowIso
+        };
+
+        if (isValid) {
+          setValidStream(prev => [record, ...prev.slice(0, 150)]);
+          checkAlertTriggers(rawPayload);
+        } else {
+          setInvalidStream(prev => [record, ...prev.slice(0, 150)]);
+          if (forcedErrorType) {
+            addToast("warning", "Corrupted Packet Quarantined", errors[0]);
+          }
+        }
+
+        return record;
+      };
+
+      const checkAlertTriggers = (pkt) => {
+        const nowIso = new Date().toISOString();
+        const devId = pkt.device_id || "Unknown";
+
+        if (pkt.cpu > 80) {
+          const newAlert = {
+            id: `ALT-CPU-${Date.now()}`,
+            device_id: devId,
+            metric: "CPU Utilization",
+            value: `${pkt.cpu}%`,
+            threshold: "80%",
+            severity: pkt.cpu > 90 ? "Critical" : "Warning",
+            timestamp: nowIso,
+            message: `CPU threshold violated on ${devId} (${pkt.cpu}%). Critical thread workload detected.`
+          };
+          setAlerts(prev => [newAlert, ...prev.slice(0, 49)]);
+          if (pkt.cpu > 92) {
+            addToast("danger", `CRITICAL: CPU Alert (${pkt.cpu}%)`, `${devId} exceeds safe operating threshold!`);
+          }
+        }
+
+        if (pkt.memory > 90) {
+          const newAlert = {
+            id: `ALT-MEM-${Date.now()}`,
+            device_id: devId,
+            metric: "Memory Usage",
+            value: `${pkt.memory}%`,
+            threshold: "90%",
+            severity: "Critical",
+            timestamp: nowIso,
+            message: `Memory buffer exhaustion risk on ${devId} (${pkt.memory}%). Packet buffering impacted.`
+          };
+          setAlerts(prev => [newAlert, ...prev.slice(0, 49)]);
+        }
+
+        if (pkt.latency > 100) {
+          const newAlert = {
+            id: `ALT-LAT-${Date.now()}`,
+            device_id: devId,
+            metric: "RTT Latency",
+            value: `${pkt.latency}ms`,
+            threshold: "100ms",
+            severity: "Warning",
+            timestamp: nowIso,
+            message: `High latency hop detected on interface ${pkt.interface} (${pkt.latency}ms).`
+          };
+          setAlerts(prev => [newAlert, ...prev.slice(0, 49)]);
+        }
+
+        if (pkt.packet_loss > 5) {
+          const newAlert = {
+            id: `ALT-LOSS-${Date.now()}`,
+            device_id: devId,
+            metric: "Packet Loss",
+            value: `${pkt.packet_loss}%`,
+            threshold: "5%",
+            severity: "Critical",
+            timestamp: nowIso,
+            message: `Severe line-card packet discard on ${pkt.interface} (${pkt.packet_loss}%).`
+          };
+          setAlerts(prev => [newAlert, ...prev.slice(0, 49)]);
+        }
+      };
+
+      useEffect(() => {
+        if (!isGeneratorActive) return;
+        if (validStream.length === 0) {
+          for (let i = 0; i < 15; i++) {
+            generatePacket();
+          }
+        }
+
+        const interval = setInterval(() => {
+          generatePacket();
+        }, generatorInterval);
+        return () => clearInterval(interval);
+      }, [isGeneratorActive, generatorInterval, devices]);
+
+      const exportCsv = (type = "valid") => {
+        const stream = type === "valid" ? validStream : invalidStream;
+        if (stream.length === 0) {
+          addToast("info", "No Telemetry to Export", "The stream buffer is currently empty.");
+          return;
+        }
+
+        const headers = ["Packet_ID", "Device_ID", "CPU_%", "Memory_%", "Bandwidth_Mbps", "Packet_Loss_%", "Latency_ms", "Interface", "Timestamp", "Validation_Status", "Errors"];
+        const rows = stream.map(item => {
+          const p = item.payload || {};
+          return [
+            item.id,
+            `"${p.device_id || ''}"`,
+            p.cpu || '',
+            p.memory || '',
+            p.bandwidth || '',
+            p.packet_loss || '',
+            p.latency || '',
+            `"${p.interface || ''}"`,
+            `"${p.timestamp || ''}"`,
+            item.isValid ? "VALID" : "INVALID_REJECTED",
+            `"${(item.errors || []).join('; ')}"`
+          ].join(',');
+        });
+
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `telemetry_${type}_export_${Date.now()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        addToast("success", "Export Completed", `Exported ${stream.length} ${type} telemetry records to CSV.`);
+      };
+
+      return (
+        <AppContext.Provider value={{
+          isAuthenticated, setIsAuthenticated,
+          currentUser, setCurrentUser,
+          login, logout,
+          role, setRole,
+          activePage, setActivePage,
+          isGeneratorActive, setIsGeneratorActive,
+          generatorInterval, setGeneratorInterval,
+          devices, setDevices,
+          validStream, invalidStream,
+          alerts, setAlerts,
+          toasts, addToast,
+          generatePacket, validatePacket,
+          exportCsv,
+          showAiModal, setShowAiModal,
+          showShareModal, setShowShareModal,
+          selectedAnomaly, setSelectedAnomaly
+        }}>
+          {children}
+        </AppContext.Provider>
+      );
+    }
+
+    // --- Header Component ---
+    function Header() {
+      const { role, setRole, isGeneratorActive, setIsGeneratorActive, setShowAiModal, setSelectedAnomaly, currentUser, logout, setShowShareModal } = useContext(AppContext);
+
+      return (
+        <header className="sticky top-0 z-40 bg-cisco-surface/90 backdrop-blur-md border-b border-cisco-border px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cisco-blue to-cisco-cyan flex items-center justify-center shadow-lg shadow-cisco-cyan/20">
+              <Icon name="activity" className="w-5 h-5 text-cisco-navy stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-white text-base tracking-tight">YANG-Push</span>
+                <span className="text-cisco-cyan font-mono text-xs px-1.5 py-0.5 rounded bg-cisco-card border border-cisco-border">RFC 8641</span>
+              </div>
+              <div className="text-[10px] text-slate-400 font-mono hidden sm:block">Deterministic In-Line Telemetry Ingestion</div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 sm:gap-4">
+            <button 
+              onClick={() => setIsGeneratorActive(!isGeneratorActive)} 
+              className="px-3.5 py-1.5 rounded-xl bg-white text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md hover:bg-slate-200 transition-all">
+              <span className={`w-2 h-2 rounded-full ${isGeneratorActive ? 'bg-emerald-600 animate-pulse' : 'bg-amber-600'}`}></span>
+              <span>{isGeneratorActive ? 'LIVE (2s)' : 'PAUSED'}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setSelectedAnomaly({
+                  device: "Router-01",
+                  title: "Routing Engine Surging & BGP Rib Recalculation",
+                  metric: "CPU 94% / Latency 142ms",
+                  explanation: "BGP neighbor flapping observed on GigabitEthernet0/0/0/1 triggered high rib-in recalculation. Kernel memory pressure increased by 18% in the last 60 seconds.",
+                  recommendation: "Inspect BGP peer timers (RFC 4271) and verify optics signal strength (DOM) on xe-0/1/0."
+                });
+                setShowAiModal(true);
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-white text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md hover:bg-slate-200 transition-all">
+              <Icon name="sparkles" className="w-3.5 h-3.5 text-black" />
+              <span className="hidden sm:inline">AI Copilot</span>
+            </button>
+
+            {/* Open on Any Device / Network Button */}
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="px-3 py-1.5 rounded-xl bg-white text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md hover:bg-slate-200 transition-all">
+              <Icon name="share-2" className="w-3.5 h-3.5 text-black" />
+              <span className="hidden sm:inline">Open on Mobile / Any Network</span>
+            </button>
+
+            <div className="flex items-center gap-1.5 text-xs bg-cisco-navy px-2.5 py-1.5 rounded-lg border border-cisco-border">
+              <span className="text-slate-500 hidden lg:inline font-mono">Role:</span>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className="bg-transparent text-slate-200 font-semibold focus:outline-none cursor-pointer">
+                <option value="Admin" className="bg-cisco-card text-white">Admin (Full Control)</option>
+                <option value="Engineer" className="bg-cisco-card text-white">Engineer (NOC Operator)</option>
+                <option value="Viewer" className="bg-cisco-card text-white">Viewer (Read-Only)</option>
+              </select>
+            </div>
+
+            {/* Operator Profile & Sign Out */}
+            <div className="flex items-center gap-2 pl-2 border-l border-cisco-border">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-cisco-blue to-cisco-cyan text-cisco-navy font-extrabold text-xs flex items-center justify-center shadow-sm">
+                {currentUser?.name ? currentUser.name.slice(0, 2).toUpperCase() : "OP"}
+              </div>
+              <div className="hidden xl:block text-left">
+                <div className="text-xs font-semibold text-white leading-tight truncate max-w-[130px]">
+                  {currentUser?.name || "NOC Operator"}
+                </div>
+                <div className="text-[10px] font-mono text-cisco-cyan leading-tight">{role} Mode</div>
+              </div>
+              <button
+                onClick={logout}
+                title="Sign Out to Login Page"
+                className="px-3 py-1.5 rounded-xl bg-white text-black font-extrabold text-xs font-mono flex items-center gap-1.5 shadow-md hover:bg-slate-200 transition-all">
+                <Icon name="log-out" className="w-3.5 h-3.5 text-black" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
+            </div>
+          </div>
+        </header>
+      );
+    }
+
+    // --- Sidebar Component ---
+    function Sidebar() {
+      const { activePage, setActivePage, validStream, invalidStream, alerts, logout } = useContext(AppContext);
+
+      const navItems = [
+        { id: "home", label: "Home Overview", icon: "home" },
+        { id: "dashboard", label: "Live Telemetry", icon: "layout-dashboard" },
+        { id: "stream", label: "Telemetry Stream", icon: "activity", badge: validStream.length },
+        { id: "validation", label: "Schema Validator", icon: "shield-check", badge: invalidStream.length, badgeColor: "bg-rose-500/20 text-rose-400 border border-rose-500/30" },
+        { id: "devices", label: "Device Manager", icon: "server" },
+        { id: "alerts", label: "Alert Monitoring", icon: "alert-triangle", badge: alerts.length, badgeColor: "bg-amber-500/20 text-amber-400 border border-amber-500/30" },
+        { id: "architecture", label: "Pipeline Flow", icon: "git-merge" },
+        { id: "analytics", label: "Network Analytics", icon: "bar-chart-3" },
+        { id: "about", label: "About YANG-Push", icon: "book-open" },
+      ];
+
+      return (
+        <aside className="w-64 bg-cisco-surface border-r border-cisco-border p-4 flex flex-col justify-between shrink-0 hidden md:flex">
+          <div className="space-y-1">
+            <div className="px-3 py-2 text-[11px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+              Telemetry Observability
+            </div>
+            {navItems.map(item => {
+              const isActive = activePage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActivePage(item.id)}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                    isActive
+                      ? 'bg-white text-black shadow-lg shadow-white/10'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}>
+                  <div className="flex items-center gap-3">
+                    <Icon name={item.icon} className={`w-4 h-4 ${isActive ? 'text-black' : 'text-slate-400'}`} />
+                    <span>{item.label}</span>
+                  </div>
+                  {item.badge !== undefined && (
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${item.badgeColor || 'bg-cisco-navy text-slate-300 border border-cisco-border'}`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-cisco-navy/80 border border-cisco-border text-xs font-mono space-y-2">
+            <div className="flex items-center justify-between text-slate-400">
+              <span>Pipeline Health:</span>
+              <span className="text-emerald-400 font-bold">OPTIMAL</span>
+            </div>
+            <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <div className="bg-gradient-to-r from-cisco-blue to-cisco-cyan h-1.5 rounded-full" style={{ width: '92%' }}></div>
+            </div>
+            <div className="flex justify-between text-[10px] text-slate-500 pt-1">
+              <span>Ingestion: 120 pkt/min</span>
+              <span>Rejection: 18%</span>
+            </div>
+
+            <button
+              onClick={logout}
+              className="w-full mt-2.5 py-2.5 rounded-xl bg-white text-black font-extrabold hover:bg-slate-200 flex items-center justify-center gap-2 text-xs shadow-md transition-all">
+              <Icon name="log-out" className="w-3.5 h-3.5 text-black" />
+              <span>Sign Out Terminal</span>
+            </button>
+          </div>
+        </aside>
+      );
+    }
+
+    // --- Mobile Bottom Nav ---
+    function MobileNav() {
+      const { activePage, setActivePage, setShowShareModal } = useContext(AppContext);
+      const [showMenu, setShowMenu] = useState(false);
+
+      const items = [
+        { id: "home", icon: "home", label: "Home" },
+        { id: "dashboard", icon: "layout-dashboard", label: "Dashboard" },
+        { id: "stream", icon: "activity", label: "Stream" },
+        { id: "validation", icon: "shield-check", label: "Validator" },
+        { id: "alerts", icon: "alert-triangle", label: "Alerts" }
+      ];
+
+      const allPages = [
+        { id: "home", icon: "home", label: "Home Overview" },
+        { id: "dashboard", icon: "layout-dashboard", label: "Live Dashboard" },
+        { id: "stream", icon: "activity", label: "Telemetry Stream" },
+        { id: "validation", icon: "shield-check", label: "Schema Validator" },
+        { id: "devices", icon: "server", label: "Device Management" },
+        { id: "alerts", icon: "alert-triangle", label: "Alert Monitoring" },
+        { id: "architecture", icon: "git-merge", label: "Pipeline Flow" },
+        { id: "analytics", icon: "bar-chart-3", label: "Network Analytics" },
+        { id: "about", icon: "book-open", label: "About YANG-Push" },
+      ];
+
+      return (
+        <>
+          {/* Full Mobile Drawer */}
+          {showMenu && (
+            <div className="md:hidden fixed inset-0 z-50 bg-black/95 p-6 flex flex-col justify-between overflow-y-auto">
+              <div>
+                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                  <span className="font-extrabold text-white text-base">Navigation Menu</span>
+                  <button onClick={() => setShowMenu(false)} className="text-slate-400 p-2">
+                    <Icon name="x" className="w-5 h-5 text-white" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-2 pt-4">
+                  {allPages.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => { setActivePage(p.id); setShowMenu(false); }}
+                      className={`p-3 rounded-xl flex items-center gap-3 text-xs font-bold transition-all ${
+                        activePage === p.id ? 'bg-white text-black shadow-md' : 'text-slate-300 hover:bg-slate-900'
+                      }`}>
+                      <Icon name={p.icon} className="w-4 h-4" />
+                      <span>{p.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-slate-800 space-y-2">
+                <button
+                  onClick={() => { setShowShareModal(true); setShowMenu(false); }}
+                  className="w-full py-3 rounded-xl bg-white text-black font-extrabold text-xs flex items-center justify-center gap-2 shadow-md">
+                  <Icon name="share-2" className="w-4 h-4 text-black" />
+                  <span>Share with Phone / Network</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Bottom Nav Bar */}
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-black/95 border-t border-slate-800 px-3 py-2 flex justify-around backdrop-blur-md">
+            {items.map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActivePage(item.id)}
+                className={`flex flex-col items-center gap-1 text-[10px] ${activePage === item.id ? 'text-white font-extrabold' : 'text-slate-500'}`}>
+                <Icon name={item.icon} className="w-4 h-4" />
+                <span>{item.label}</span>
+              </button>
+            ))}
+            <button
+              onClick={() => setShowMenu(true)}
+              className="flex flex-col items-center gap-1 text-[10px] text-slate-500 hover:text-white">
+              <Icon name="menu" className="w-4 h-4" />
+              <span>Menu</span>
+            </button>
+          </nav>
+        </>
+      );
+    }
+
+    // --- Toast Container ---
+    function ToastContainer() {
+      const { toasts } = useContext(AppContext);
+      return (
+        <div className="fixed bottom-16 md:bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+          {toasts.map(t => {
+            const borderColor = t.type === 'danger' ? 'border-rose-500/50 bg-rose-950/90 text-rose-200' :
+                               t.type === 'warning' ? 'border-amber-500/50 bg-amber-950/90 text-amber-200' :
+                               t.type === 'success' ? 'border-emerald-500/50 bg-emerald-950/90 text-emerald-200' :
+                               'border-cisco-cyan/50 bg-cisco-card/95 text-cyan-200';
+            return (
+              <div key={t.id} className={`p-3.5 rounded-xl border backdrop-blur-md shadow-2xl pointer-events-auto transition-all ${borderColor}`}>
+                <div className="flex items-center gap-2 font-bold text-xs">
+                  <Icon name={t.type === 'danger' ? 'alert-octagon' : t.type === 'warning' ? 'alert-triangle' : 'check-circle'} className="w-4 h-4" />
+                  <span>{t.title}</span>
+                </div>
+                <div className="text-[11px] mt-1 font-mono text-slate-300">{t.message}</div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // --- AI Anomaly Modal ---
+    function AiAnomalyModal() {
+      const { showAiModal, setShowAiModal,
+          showShareModal, setShowShareModal, selectedAnomaly } = useContext(AppContext);
+      if (!showAiModal) return null;
+
+      return (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-cisco-surface border border-cisco-cyan/50 rounded-2xl max-w-lg w-full p-6 shadow-2xl shadow-cisco-cyan/10 relative">
+            <button 
+              onClick={() => setShowAiModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white">
+              <Icon name="x" className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-cisco-cyan/20 border border-cisco-cyan/40 text-cisco-cyan flex items-center justify-center">
+                <Icon name="sparkles" className="w-5 h-5 text-cisco-cyan" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-base">Network Telemetry AI Diagnostic</h3>
+                <span className="text-[11px] font-mono text-cisco-cyan">Heuristic AIOps Inference Engine</span>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="p-3 rounded-xl bg-cisco-navy border border-cisco-border">
+                <div className="text-slate-400 font-mono text-[10px] uppercase">Incident Target</div>
+                <div className="text-white font-bold text-sm mt-0.5">{selectedAnomaly?.device || 'Router-01'} — {selectedAnomaly?.title}</div>
+                <div className="text-rose-400 font-mono text-[11px] mt-1">{selectedAnomaly?.metric}</div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-cisco-card border border-cisco-border space-y-2">
+                <div className="font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Icon name="brain-circuit" className="w-4 h-4 text-cisco-cyan" />
+                  Root Cause Analysis (Natural Language):
+                </div>
+                <p className="text-slate-300 leading-relaxed">
+                  {selectedAnomaly?.explanation || "A telemetry anomaly occurred with sudden metric deviation from normal moving averages."}
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 space-y-1">
+                <div className="font-semibold text-emerald-400 flex items-center gap-1.5">
+                  <Icon name="check-circle" className="w-4 h-4 text-emerald-400" />
+                  Recommended Mitigation Action:
+                </div>
+                <p className="text-emerald-200 font-mono text-[11px]">
+                  {selectedAnomaly?.recommendation || "Verify interface load balancing and monitor packet drop counters."}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowAiModal(false)}
+                className="px-4 py-2 rounded-xl bg-cisco-card border border-cisco-border text-slate-300 hover:text-white text-xs font-semibold">
+                Dismiss
+              </button>
+              <button 
+                onClick={() => {
+                  alert("Autonomous diagnostic playbook triggered on target switch!");
+                  setShowAiModal(false);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-white text-black font-extrabold text-xs hover:bg-slate-200 shadow-xl shadow-white/10 transition-all flex items-center gap-1.5">
+                <Icon name="terminal" className="w-3.5 h-3.5 text-black" />
+                Execute Remediation
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- PAGE 1: HOME PAGE ---
+    function HomePage() {
+      const { setActivePage, validStream, invalidStream, generatePacket, role } = useContext(AppContext);
+
+      return (
+        <div className="space-y-12 pb-16">
+          <div className="relative rounded-3xl border border-cisco-border bg-gradient-to-b from-cisco-surface via-cisco-card to-cisco-navy p-8 md:p-12 overflow-hidden circuit-glow">
+            <div className="max-w-3xl space-y-6 relative z-10">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cisco-cyan/30 bg-cisco-cyan/10 text-cisco-cyan text-xs font-mono">
+                <span className="w-2 h-2 rounded-full bg-cisco-cyan animate-pulse"></span>
+                Next-Gen Push Telemetry Architecture (RFC 8639 / RFC 8641)
+              </div>
+
+              <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-[1.1]">
+                Schema-Validated <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cisco-cyan via-cisco-accent to-cisco-blue">
+                  YANG-Push Telemetry Pipeline
+                </span>
+              </h1>
+
+              <p className="text-slate-300 text-sm sm:text-base leading-relaxed max-w-2xl font-normal">
+                Enterprise real-time telemetry ingestion platform. Devices stream continuous YANG data to a collector that enforces in-line semantic validation, isolating schema drift, wrong data types, and corrupted leaves before polluting downstream time-series datalakes.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  onClick={() => setActivePage("dashboard")}
+                  className="px-6 py-3 rounded-xl bg-white text-black font-extrabold text-xs sm:text-sm hover:bg-slate-200 transition-all shadow-xl shadow-white/10 flex items-center gap-2">
+                  <Icon name="layout-dashboard" className="w-4 h-4 text-black" />
+                  Open Live Dashboard
+                </button>
+                <button
+                  onClick={() => setActivePage("validation")}
+                  className="px-6 py-3 rounded-xl bg-white text-black font-extrabold text-xs sm:text-sm hover:bg-slate-200 transition-all shadow-xl shadow-white/10 flex items-center gap-2">
+                  <Icon name="shield-check" className="w-4 h-4 text-black" />
+                  Inspect Validator Engine
+                </button>
+                {role === "Admin" && (
+                  <button
+                    onClick={() => generatePacket("type_cpu")}
+                    className="px-5 py-3 rounded-xl bg-white text-rose-600 font-extrabold text-xs sm:text-sm hover:bg-slate-200 transition-all shadow-xl shadow-white/10 flex items-center gap-2">
+                    <Icon name="bug" className="w-3.5 h-3.5 text-rose-600" />
+                    Inject Corrupted Packet
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="absolute right-0 top-0 bottom-0 w-1/3 hidden lg:block opacity-20 pointer-events-none telemetry-grid"></div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <div className="text-xs font-mono text-slate-400">Total Valid Packets</div>
+              <div className="text-2xl sm:text-3xl font-extrabold font-mono text-white mt-1">{validStream.length}</div>
+              <div className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+                <Icon name="check" className="w-3 h-3 text-emerald-400" /> Ingested to Database
+              </div>
+            </div>
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <div className="text-xs font-mono text-slate-400">Quarantined (DLQ)</div>
+              <div className="text-2xl sm:text-3xl font-extrabold font-mono text-rose-400 mt-1">{invalidStream.length}</div>
+              <div className="text-[11px] text-rose-400 mt-1 flex items-center gap-1">
+                <Icon name="shield-alert" className="w-3 h-3 text-rose-400" /> Rejected by Validator
+              </div>
+            </div>
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <div className="text-xs font-mono text-slate-400">Subscribed Devices</div>
+              <div className="text-2xl sm:text-3xl font-extrabold font-mono text-white mt-1">4 Nodes</div>
+              <div className="text-[11px] text-cisco-cyan mt-1 flex items-center gap-1">
+                <Icon name="wifi" className="w-3 h-3 text-cisco-cyan" /> RFC 8641 Subscriptions
+              </div>
+            </div>
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <div className="text-xs font-mono text-slate-400">Validation Latency</div>
+              <div className="text-2xl sm:text-3xl font-extrabold font-mono text-white mt-1">1.4ms</div>
+              <div className="text-[11px] text-emerald-400 mt-1 flex items-center gap-1">
+                <Icon name="zap" className="w-3 h-3 text-emerald-400" /> In-Memory Compiled Tree
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-cisco-border bg-cisco-surface p-8 space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-cisco-card border border-cisco-border text-cisco-cyan flex items-center justify-center">
+                <Icon name="book" className="w-4 h-4 text-cisco-cyan" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">Understanding YANG-Push Telemetry (RFC 8641)</h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs leading-relaxed text-slate-300">
+              <div className="p-5 rounded-2xl bg-cisco-navy/80 border border-cisco-border space-y-2">
+                <div className="text-cisco-cyan font-bold text-sm flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-cisco-cyan/10 border border-cisco-cyan/30 flex items-center justify-center text-[10px]">1</span>
+                  Push vs SNMP Polling
+                </div>
+                <p>
+                  Traditional SNMP repeatedly asks devices for counters at arbitrary polling cycles (every 5-15 mins), causing CPU spikes. YANG-Push flips the model: routers stream continuous telemetry updates asynchronously.
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-cisco-navy/80 border border-cisco-border space-y-2">
+                <div className="text-cisco-cyan font-bold text-sm flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-cisco-cyan/10 border border-cisco-cyan/30 flex items-center justify-center text-[10px]">2</span>
+                  Model-Driven Schemas
+                </div>
+                <p>
+                  Telemetry data conforms strictly to structured YANG data trees (RFC 7950 / RFC 7951 JSON). Every leaf, container, and list has mathematically defined types, numeric bounds, and regex constraints.
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-cisco-navy/80 border border-cisco-border space-y-2">
+                <div className="text-cisco-cyan font-bold text-sm flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-cisco-cyan/10 border border-cisco-cyan/30 flex items-center justify-center text-[10px]">3</span>
+                  In-Line Validation
+                </div>
+                <p>
+                  Network OS upgrades, multi-vendor syntax shifts, and corrupted frames can introduce schema drift. Our in-line validator verifies every packet before database write, ensuring AIOps clean ingestion.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- PAGE 2: DASHBOARD PAGE ---
+    function DashboardPage() {
+      const { validStream, devices, exportCsv } = useContext(AppContext);
+
+      const latestPkt = validStream[0]?.payload || { cpu: 48, memory: 61, bandwidth: 420, packet_loss: 0.04, latency: 14.2 };
+      const avgCpu = Math.round(validStream.slice(0, 15).reduce((acc, p) => acc + (p.payload?.cpu || 0), 0) / Math.max(1, validStream.slice(0, 15).length)) || 48;
+      const avgMem = Math.round(validStream.slice(0, 15).reduce((acc, p) => acc + (p.payload?.memory || 0), 0) / Math.max(1, validStream.slice(0, 15).length)) || 62;
+      const avgBw = Math.round(validStream.slice(0, 15).reduce((acc, p) => acc + (p.payload?.bandwidth || 0), 0) / Math.max(1, validStream.slice(0, 15).length)) || 450;
+      const avgLat = (validStream.slice(0, 15).reduce((acc, p) => acc + (p.payload?.latency || 0), 0) / Math.max(1, validStream.slice(0, 15).length)).toFixed(1) || "16.4";
+
+      const chartPoints = useMemo(() => {
+        return validStream.slice(0, 16).reverse().map((pkt, idx) => ({
+          idx,
+          cpu: pkt.payload?.cpu || 40,
+          memory: pkt.payload?.memory || 50,
+          bw: pkt.payload?.bandwidth || 300,
+          lat: pkt.payload?.latency || 15
+        }));
+      }, [validStream]);
+
+      return (
+        <div className="space-y-6 pb-16">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                <Icon name="layout-dashboard" className="w-6 h-6 text-cisco-cyan" />
+                Live Telemetry Observability Dashboard
+              </h1>
+              <p className="text-xs text-slate-400 mt-1">Real-time metrics streaming via YANG-Push periodic & on-change subscriptions.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => exportCsv("valid")}
+                className="px-4 py-2 rounded-xl bg-white text-black font-extrabold text-xs hover:bg-slate-200 transition-all shadow-md flex items-center gap-1.5">
+                <Icon name="download" className="w-3.5 h-3.5 text-black" />
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-slate-400">Core CPU Utilization</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${latestPkt.cpu > 80 ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                  {latestPkt.cpu > 80 ? 'HIGH' : 'NORMAL'}
+                </span>
+              </div>
+              <div className="text-3xl font-extrabold font-mono text-white mt-2 flex items-baseline gap-1">
+                {latestPkt.cpu}<span className="text-sm font-normal text-slate-400">%</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-2 font-mono flex items-center justify-between">
+                <span>Avg 15m: {avgCpu}%</span>
+                <span className="text-cisco-cyan">1s polling</span>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-slate-400">Memory Allocation</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400">STABLE</span>
+              </div>
+              <div className="text-3xl font-extrabold font-mono text-white mt-2 flex items-baseline gap-1">
+                {latestPkt.memory}<span className="text-sm font-normal text-slate-400">%</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-2 font-mono flex items-center justify-between">
+                <span>Avg: {avgMem}%</span>
+                <span className="text-cisco-cyan">Buffer Pool OK</span>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-slate-400">Fabric Bandwidth</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cisco-card border border-cisco-border text-cisco-cyan">REALTIME</span>
+              </div>
+              <div className="text-3xl font-extrabold font-mono text-white mt-2 flex items-baseline gap-1">
+                {latestPkt.bandwidth}<span className="text-sm font-normal text-slate-400">Mbps</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-2 font-mono flex items-center justify-between">
+                <span>Mean: {avgBw} Mbps</span>
+                <span className="text-emerald-400">No Saturation</span>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-slate-400">RTT Latency / Loss</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${latestPkt.latency > 100 ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                  {latestPkt.latency > 100 ? 'HIGH RTT' : 'NOMINAL'}
+                </span>
+              </div>
+              <div className="text-3xl font-extrabold font-mono text-white mt-2 flex items-baseline gap-2">
+                {latestPkt.latency}<span className="text-sm font-normal text-slate-400">ms</span>
+                <span className="text-xs font-mono text-slate-400">({latestPkt.packet_loss}% loss)</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-2 font-mono flex items-center justify-between">
+                <span>Avg Latency: {avgLat}ms</span>
+                <span className="text-cisco-cyan">{latestPkt.interface || 'GigabitEthernet0'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 rounded-2xl bg-cisco-surface border border-cisco-border p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-white text-sm">Telemetry Time-Series (CPU % & Memory %)</h3>
+                  <p className="text-xs text-slate-400 font-mono">Stream updates every 2s — RFC 7951 Validated Points</p>
+                </div>
+                <div className="flex items-center gap-3 text-xs font-mono">
+                  <span className="flex items-center gap-1.5 text-cisco-cyan">
+                    <span className="w-2.5 h-2.5 rounded-full bg-cisco-cyan"></span> CPU %
+                  </span>
+                  <span className="flex items-center gap-1.5 text-emerald-400">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Memory %
+                  </span>
+                </div>
+              </div>
+
+              <div className="h-64 w-full bg-cisco-navy rounded-xl border border-cisco-border p-3 relative flex flex-col justify-between">
+                <svg className="w-full h-full overflow-visible" viewBox="0 0 500 200" preserveAspectRatio="none">
+                  <line x1="0" y1="50" x2="500" y2="50" stroke="#1C2F65" strokeDasharray="3 3" />
+                  <line x1="0" y1="100" x2="500" y2="100" stroke="#1C2F65" strokeDasharray="3 3" />
+                  <line x1="0" y1="150" x2="500" y2="150" stroke="#1C2F65" strokeDasharray="3 3" />
+
+                  {chartPoints.length > 1 && (
+                    <polyline
+                      fill="none"
+                      stroke="#00D2FF"
+                      strokeWidth="2.5"
+                      points={chartPoints.map((pt, i) => `${(i / (chartPoints.length - 1)) * 500},${200 - (pt.cpu * 1.8)}`).join(' ')}
+                    />
+                  )}
+
+                  {chartPoints.length > 1 && (
+                    <polyline
+                      fill="none"
+                      stroke="#10B981"
+                      strokeWidth="2.5"
+                      points={chartPoints.map((pt, i) => `${(i / (chartPoints.length - 1)) * 500},${200 - (pt.memory * 1.8)}`).join(' ')}
+                    />
+                  )}
+
+                  {chartPoints.map((pt, i) => (
+                    <circle
+                      key={i}
+                      cx={(i / Math.max(1, chartPoints.length - 1)) * 500}
+                      cy={200 - (pt.cpu * 1.8)}
+                      r="3.5"
+                      fill="#00D2FF"
+                    />
+                  ))}
+                </svg>
+
+                <div className="flex justify-between text-[10px] font-mono text-slate-500 pt-2 border-t border-cisco-border">
+                  <span>T - 30s</span>
+                  <span>T - 20s</span>
+                  <span>T - 10s</span>
+                  <span className="text-cisco-cyan font-bold">LIVE (T-0)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-cisco-surface border border-cisco-border p-6 space-y-4 flex flex-col justify-between">
+              <div>
+                <h3 className="font-bold text-white text-sm">Interface Status Distribution</h3>
+                <p className="text-xs text-slate-400 font-mono">Monitored Fabric Endpoints</p>
+              </div>
+
+              <div className="flex items-center justify-center py-4">
+                <div className="relative w-36 h-36 flex items-center justify-center">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="40" stroke="#1C2F65" strokeWidth="12" fill="none" />
+                    <circle cx="50" cy="50" r="40" stroke="#10B981" strokeWidth="12" strokeDasharray="188 251" fill="none" />
+                    <circle cx="50" cy="50" r="40" stroke="#F59E0B" strokeWidth="12" strokeDasharray="63 251" strokeDashoffset="-188" fill="none" />
+                  </svg>
+                  <div className="absolute text-center">
+                    <div className="text-2xl font-extrabold font-mono text-white">4</div>
+                    <div className="text-[10px] text-slate-400 uppercase font-mono">Interfaces</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-xs font-mono">
+                <div className="flex items-center justify-between p-2 rounded-lg bg-cisco-navy border border-cisco-border">
+                  <span className="flex items-center gap-2 text-slate-300">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Oper-Status: UP
+                  </span>
+                  <span className="font-bold text-emerald-400">3 Links (75%)</span>
+                </div>
+                <div className="flex items-center justify-between p-2 rounded-lg bg-cisco-navy border border-cisco-border">
+                  <span className="flex items-center gap-2 text-slate-300">
+                    <span className="w-2 h-2 rounded-full bg-amber-400"></span> Oper-Status: DEGRADED
+                  </span>
+                  <span className="font-bold text-amber-400">1 Link (25%)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- PAGE 3: STREAM PAGE ---
+    function StreamPage() {
+      const { validStream, isGeneratorActive, setIsGeneratorActive, exportCsv } = useContext(AppContext);
+      const [filterDevice, setFilterDevice] = useState("ALL");
+      const [searchTerm, setSearchTerm] = useState("");
+      const [selectedPacket, setSelectedPacket] = useState(null);
+
+      const filteredPackets = useMemo(() => {
+        return validStream.filter(pkt => {
+          const dMatch = filterDevice === "ALL" || pkt.payload?.device_id === filterDevice;
+          const sMatch = !searchTerm || JSON.stringify(pkt.payload).toLowerCase().includes(searchTerm.toLowerCase());
+          return dMatch && sMatch;
+        });
+      }, [validStream, filterDevice, searchTerm]);
+
+      return (
+        <div className="space-y-6 pb-16">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                <Icon name="activity" className="w-6 h-6 text-cisco-cyan" />
+                Live Ingested Telemetry Stream (RFC 7951 JSON)
+              </h1>
+              <p className="text-xs text-slate-400 mt-1">Inspecting validated YANG datastore notifications streamed over gRPC / WebSocket.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setIsGeneratorActive(!isGeneratorActive)}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-semibold transition-all ${
+                  isGeneratorActive ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                }`}>
+                {isGeneratorActive ? 'Pause Stream' : 'Resume Stream'}
+              </button>
+              <button 
+                onClick={() => exportCsv("valid")}
+                className="px-4 py-2 rounded-xl bg-white text-black font-extrabold text-xs hover:bg-slate-200 transition-all shadow-md flex items-center gap-1.5">
+                <Icon name="download" className="w-3.5 h-3.5 text-black" />
+                Export CSV
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-cisco-surface border border-cisco-border flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+            <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+              <Icon name="search" className="w-4 h-4 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search raw payload keywords (e.g., 'Router-01', 'GigabitEthernet')..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-cisco-navy border border-cisco-border rounded-xl px-3 py-1.5 w-full text-slate-200 focus:outline-none focus:border-cisco-cyan/60"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">Device Filter:</span>
+              <select
+                value={filterDevice}
+                onChange={(e) => setFilterDevice(e.target.value)}
+                className="bg-cisco-navy border border-cisco-border rounded-xl px-3 py-1.5 text-slate-200 focus:outline-none focus:border-cisco-cyan/60">
+                <option value="ALL">All Devices ({validStream.length})</option>
+                <option value="Router-01">Router-01</option>
+                <option value="Router-02">Router-02</option>
+                <option value="Switch-01">Switch-01</option>
+                <option value="Switch-02">Switch-02</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-3 max-h-[650px] overflow-y-auto pr-1">
+              {filteredPackets.length === 0 ? (
+                <div className="p-8 rounded-2xl bg-cisco-surface border border-cisco-border text-center text-slate-400 text-xs font-mono">
+                  No matching packets found in buffer.
+                </div>
+              ) : (
+                filteredPackets.map(pkt => {
+                  const isSelected = selectedPacket?.id === pkt.id;
+                  return (
+                    <div
+                      key={pkt.id}
+                      onClick={() => setSelectedPacket(pkt)}
+                      className={`p-4 rounded-xl border transition-all cursor-pointer font-mono text-xs ${
+                        isSelected
+                          ? 'bg-cisco-card border-cisco-cyan shadow-lg shadow-cisco-cyan/10'
+                          : 'bg-cisco-surface border-cisco-border hover:border-slate-600'
+                      }`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-white flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                          {pkt.payload?.device_id}
+                        </span>
+                        <span className="text-[10px] text-slate-500">{pkt.id}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-400">
+                        <div>CPU: <span className="text-cisco-cyan font-bold">{pkt.payload?.cpu}%</span></div>
+                        <div>MEM: <span className="text-slate-200 font-bold">{pkt.payload?.memory}%</span></div>
+                        <div>BW: <span className="text-slate-200 font-bold">{pkt.payload?.bandwidth} Mbps</span></div>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-slate-500 mt-2 pt-2 border-t border-cisco-border/60">
+                        <span>{pkt.payload?.interface}</span>
+                        <span>{pkt.received_at?.slice(11, 19)} UTC</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="rounded-2xl bg-cisco-surface border border-cisco-border p-5 flex flex-col justify-between max-h-[650px]">
+              <div>
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-cisco-border text-xs font-mono">
+                  <span className="font-bold text-white flex items-center gap-1.5">
+                    <Icon name="code" className="w-4 h-4 text-cisco-cyan" />
+                    RFC 7951 JSON Datastore Notification
+                  </span>
+                  <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-[10px]">
+                    STATUS: 200 OK (VALID)
+                  </span>
+                </div>
+
+                <pre className="bg-cisco-navy p-4 rounded-xl text-xs font-mono text-cyan-300 overflow-x-auto max-h-[500px] border border-cisco-border leading-relaxed">
+                  {selectedPacket 
+                    ? JSON.stringify(selectedPacket.payload, null, 2)
+                    : filteredPackets[0] 
+                      ? JSON.stringify(filteredPackets[0].payload, null, 2)
+                      : "// Waiting for telemetry stream..."}
+                </pre>
+              </div>
+
+              <div className="pt-4 border-t border-cisco-border text-xs text-slate-400 font-mono flex justify-between items-center">
+                <span>Schema Spec: ietf-interfaces.yang</span>
+                <span className="text-cisco-cyan">Deterministic Serialization</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- PAGE 4: VALIDATION PAGE ---
+    function ValidationPage() {
+      const { validStream, invalidStream, generatePacket, role, exportCsv } = useContext(AppContext);
+      const [activeTab, setActiveTab] = useState("invalid");
+      const [customJsonInput, setCustomJsonInput] = useState(JSON.stringify({
+        device_id: "Router-01",
+        cpu: "OVERFLOW_STRING",
+        memory: 64,
+        bandwidth: 320,
+        timestamp: "2026-01-12T12:30:00Z"
+      }, null, 2));
+      const [testResult, setTestResult] = useState(null);
+
+      const runCustomTest = () => {
+        try {
+          const parsed = JSON.parse(customJsonInput);
+          const errors = [];
+          if (!parsed.device_id || typeof parsed.device_id !== 'string') errors.push("Wrong data type or missing 'device_id'");
+          if (typeof parsed.cpu !== 'number') errors.push("Wrong Data Type: CPU must be a number");
+          if (typeof parsed.memory !== 'number') errors.push("Wrong Data Type: Memory must be a number");
+          if (typeof parsed.bandwidth !== 'number') errors.push("Wrong Data Type: Bandwidth must be a number");
+          if (!parsed.timestamp || isNaN(new Date(parsed.timestamp).getTime())) errors.push("Timestamp Error: invalid ISO 8601 date");
+          
+          setTestResult({
+            isValid: errors.length === 0,
+            errors
+          });
+        } catch (e) {
+          setTestResult({ isValid: false, errors: ["Invalid JSON syntax: " + e.message] });
+        }
+      };
+
+      return (
+        <div className="space-y-6 pb-16">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                <Icon name="shield-check" className="w-6 h-6 text-cisco-cyan" />
+                YANG Telemetry Schema Validation Center
+              </h1>
+              <p className="text-xs text-slate-400 mt-1">Real-time conformance enforcement against authoritative RFC 7950 models.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {role === "Admin" && (
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => generatePacket("type_cpu")}
+                    className="px-3.5 py-1.5 rounded-xl bg-white text-black font-extrabold text-xs hover:bg-slate-200 transition-all shadow-sm">
+                    + Type Fault
+                  </button>
+                  <button 
+                    onClick={() => generatePacket("missing_id")}
+                    className="px-3.5 py-1.5 rounded-xl bg-white text-black font-extrabold text-xs hover:bg-slate-200 transition-all shadow-sm">
+                    + Missing Field
+                  </button>
+                  <button 
+                    onClick={() => generatePacket("drift")}
+                    className="px-3.5 py-1.5 rounded-xl bg-white text-black font-extrabold text-xs hover:bg-slate-200 transition-all shadow-sm">
+                    + Schema Drift
+                  </button>
+                </div>
+              )}
+              <button 
+                onClick={() => exportCsv("invalid")}
+                className="px-4 py-2 rounded-xl bg-white text-black font-extrabold text-xs hover:bg-slate-200 transition-all shadow-md flex items-center gap-1.5">
+                <Icon name="download" className="w-3.5 h-3.5 text-black" />
+                Export DLQ
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 border-b border-cisco-border pb-3">
+            <button
+              onClick={() => setActiveTab("invalid")}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === "invalid"
+                  ? 'bg-white text-black shadow-lg shadow-white/10'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}>
+              <Icon name="alert-octagon" className={`w-3.5 h-3.5 ${activeTab === 'invalid' ? 'text-black' : 'text-slate-400'}`} />
+              Quarantined Invalid Telemetry ({invalidStream.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("valid")}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === "valid"
+                  ? 'bg-white text-black shadow-lg shadow-white/10'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}>
+              <Icon name="check-circle" className={`w-3.5 h-3.5 ${activeTab === 'valid' ? 'text-black' : 'text-slate-400'}`} />
+              Verified Clean Stream ({validStream.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("schema")}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                activeTab === "schema"
+                  ? 'bg-white text-black shadow-lg shadow-white/10'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}>
+              <Icon name="file-code" className={`w-3.5 h-3.5 ${activeTab === 'schema' ? 'text-black' : 'text-slate-400'}`} />
+              Active YANG Schema Specification
+            </button>
+          </div>
+
+          {activeTab === "invalid" && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-rose-950/20 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
+                <span>
+                  <strong>Dead-Letter Queue (DLQ):</strong> All packets failing type checking, range validation, or timestamp integrity are diverted here to prevent database poisoning.
+                </span>
+                <span className="font-mono font-bold">{invalidStream.length} Packets Blocked</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {invalidStream.slice(0, 8).map(pkt => (
+                  <div key={pkt.id} className="p-5 rounded-2xl bg-cisco-surface border border-rose-500/30 space-y-3 font-mono text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-[10px]">
+                        FAIL: REJECTED
+                      </span>
+                      <span className="text-slate-500 text-[10px]">{pkt.id}</span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/20 space-y-1">
+                      <div className="text-[10px] uppercase font-bold text-rose-400">Validation Errors:</div>
+                      {pkt.errors?.map((err, i) => (
+                        <div key={i} className="text-rose-200 text-xs flex items-start gap-1.5">
+                          <span className="text-rose-400">✖</span>
+                          <span>{err}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <pre className="bg-cisco-navy p-3 rounded-xl text-[11px] text-slate-300 overflow-x-auto border border-cisco-border">
+                      {JSON.stringify(pkt.payload, null, 2)}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "valid" && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between">
+                <span>
+                  <strong>Clean Ingestion Queue:</strong> Conforms 100% to RFC 7951 JSON encoding and passes all type bounds.
+                </span>
+                <span className="font-mono font-bold">{validStream.length} Packets Approved</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {validStream.slice(0, 6).map(pkt => (
+                  <div key={pkt.id} className="p-5 rounded-2xl bg-cisco-surface border border-emerald-500/30 space-y-3 font-mono text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-[10px]">
+                        PASS: 200 INGESTED
+                      </span>
+                      <span className="text-slate-500 text-[10px]">{pkt.id}</span>
+                    </div>
+                    <pre className="bg-cisco-navy p-3 rounded-xl text-[11px] text-emerald-300 overflow-x-auto border border-cisco-border">
+                      {JSON.stringify(pkt.payload, null, 2)}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "schema" && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="p-6 rounded-2xl bg-cisco-surface border border-cisco-border space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-white text-sm">Authoritative YANG Schema Rules</h3>
+                  <span className="text-xs font-mono text-cisco-cyan">RFC 8641 / RFC 7951</span>
+                </div>
+                <pre className="bg-cisco-navy p-4 rounded-xl text-xs font-mono text-cyan-300 overflow-x-auto max-h-[480px] border border-cisco-border">
+                  {JSON.stringify(SCHEMA_DEFINITION, null, 2)}
+                </pre>
+              </div>
+
+              <div className="p-6 rounded-2xl bg-cisco-surface border border-cisco-border space-y-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-bold text-white text-sm">Interactive Schema Validator</h3>
+                    <span className="text-xs text-slate-400 font-mono">Test Custom Payload</span>
+                  </div>
+                  <textarea
+                    rows="10"
+                    value={customJsonInput}
+                    onChange={(e) => setCustomJsonInput(e.target.value)}
+                    className="w-full bg-cisco-navy rounded-xl p-4 font-mono text-xs text-slate-200 border border-cisco-border focus:outline-none focus:border-cisco-cyan"
+                  />
+                  <button
+                    onClick={runCustomTest}
+                    className="mt-3 w-full py-3.5 rounded-2xl bg-white text-black font-extrabold text-xs hover:bg-slate-200 shadow-xl shadow-white/10 transition-all flex items-center justify-center gap-2">
+                    <Icon name="zap" className="w-4 h-4 text-black" /> Validate JSON Payload Against Schema
+                  </button>
+                </div>
+
+                {testResult && (
+                  <div className={`p-4 rounded-xl border font-mono text-xs transition-all ${
+                    testResult.isValid ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300' : 'bg-rose-950/30 border-rose-500/40 text-rose-300'
+                  }`}>
+                    <div className="font-bold flex items-center gap-1.5">
+                      <Icon name={testResult.isValid ? 'check-circle' : 'alert-octagon'} className="w-4 h-4" />
+                      {testResult.isValid ? "RESULT: SCHEMA COMPLIANT (PASS)" : "RESULT: VALIDATION FAILED (QUARANTINED)"}
+                    </div>
+                    {!testResult.isValid && (
+                      <ul className="mt-2 space-y-1 text-rose-200 text-[11px]">
+                        {testResult.errors.map((e, idx) => (
+                          <li key={idx}>✖ {e}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // --- PAGE 5: DEVICE MANAGEMENT ---
+    function DevicesPage() {
+      const { devices, setDevices, addToast, role } = useContext(AppContext);
+
+      const triggerReboot = (devId) => {
+        if (role === "Viewer") {
+          addToast("warning", "Access Denied", "Viewer role cannot trigger device state changes.");
+          return;
+        }
+        addToast("info", "Subscription Re-negotiation", `Sent RFC 8641 establish-subscription RPC to ${devId}`);
+        setDevices(prev => prev.map(d => d.device_id === devId ? { ...d, status: "Syncing..." } : d));
+        setTimeout(() => {
+          setDevices(prev => prev.map(d => d.device_id === devId ? { ...d, status: "Online", health: 99 } : d));
+          addToast("success", "Session Re-Established", `${devId} telemetry streaming is nominal.`);
+        }, 2000);
+      };
+
+      return (
+        <div className="space-y-6 pb-16">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                <Icon name="server" className="w-6 h-6 text-cisco-cyan" />
+                Connected Telemetry Elements
+              </h1>
+              <p className="text-xs text-slate-400 mt-1">Configured dial-out & dial-in telemetry endpoints streaming via RFC 8641.</p>
+            </div>
+            <div className="text-xs font-mono text-cisco-cyan bg-cisco-surface px-3 py-1.5 rounded-xl border border-cisco-border">
+              Total Active Nodes: {devices.length}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {devices.map(dev => (
+              <div key={dev.device_id} className="p-6 rounded-2xl bg-cisco-surface border border-cisco-border space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-extrabold text-white text-base flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full ${dev.status === 'Online' ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                      {dev.device_id}
+                    </h3>
+                    <span className="text-xs text-slate-400 font-mono">{dev.vendor} • {dev.role}</span>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-mono font-bold ${
+                    dev.status === 'Online' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  }`}>
+                    {dev.status}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs font-mono">
+                  <div className="p-3 rounded-xl bg-cisco-navy border border-cisco-border">
+                    <span className="text-slate-500 text-[10px] uppercase">Management IP</span>
+                    <div className="text-slate-200 font-bold mt-0.5">{dev.ip}</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-cisco-navy border border-cisco-border">
+                    <span className="text-slate-500 text-[10px] uppercase">Subscription Type</span>
+                    <div className="text-cisco-cyan font-bold mt-0.5">{dev.sub_type}</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-cisco-navy border border-cisco-border">
+                    <span className="text-slate-500 text-[10px] uppercase">Subscription ID</span>
+                    <div className="text-slate-200 font-bold mt-0.5">{dev.sub_id}</div>
+                  </div>
+                  <div className="p-3 rounded-xl bg-cisco-navy border border-cisco-border">
+                    <span className="text-slate-500 text-[10px] uppercase">Telemetry Uptime</span>
+                    <div className="text-slate-200 font-bold mt-0.5">{dev.uptime}</div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 font-mono text-xs">
+                  <div className="flex justify-between text-slate-400 text-[11px]">
+                    <span>Node Health Score:</span>
+                    <span className="text-white font-bold">{dev.health}%</span>
+                  </div>
+                  <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                    <div 
+                      className={`h-2 rounded-full ${dev.health > 85 ? 'bg-emerald-400' : 'bg-amber-400'}`}
+                      style={{ width: `${dev.health}%` }}></div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-cisco-border flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-mono text-[11px]">{dev.location}</span>
+                  <button
+                    onClick={() => triggerReboot(dev.device_id)}
+                    className="px-3.5 py-2 rounded-xl bg-white text-black font-extrabold hover:bg-slate-200 text-xs flex items-center gap-1.5 shadow-md transition-all">
+                    <Icon name="refresh-cw" className="w-3.5 h-3.5 text-black" />
+                    Sync YANG Tree
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // --- PAGE 6: ALERT MONITORING ---
+    function AlertsPage() {
+      const { alerts, setAlerts, addToast, role } = useContext(AppContext);
+      const [severityFilter, setSeverityFilter] = useState("ALL");
+
+      const filteredAlerts = useMemo(() => {
+        return alerts.filter(a => severityFilter === "ALL" || a.severity === severityFilter);
+      }, [alerts, severityFilter]);
+
+      const clearAllAlerts = () => {
+        if (role === "Viewer") {
+          addToast("warning", "Unauthorized", "Viewer cannot clear alerts.");
+          return;
+        }
+        setAlerts([]);
+        addToast("success", "Alerts Cleared", "All active alarms have been resolved.");
+      };
+
+      return (
+        <div className="space-y-6 pb-16">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                <Icon name="alert-triangle" className="w-6 h-6 text-amber-400" />
+                Real-Time Telemetry Alert Monitoring
+              </h1>
+              <p className="text-xs text-slate-400 mt-1">Autonomous triggers: CPU &gt; 80%, Memory &gt; 90%, Packet Loss &gt; 5%, Latency &gt; 100ms.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={clearAllAlerts}
+                className="px-4 py-2 rounded-xl bg-white text-black font-extrabold text-xs hover:bg-slate-200 shadow-md transition-all">
+                Clear All Alarms
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-cisco-surface border border-cisco-border flex items-center justify-between gap-4 text-xs font-mono">
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">Severity:</span>
+              <button 
+                onClick={() => setSeverityFilter("ALL")}
+                className={`px-3.5 py-1.5 rounded-xl font-bold transition-all ${severityFilter === 'ALL' ? 'bg-white text-black shadow-md' : 'border border-cisco-border text-slate-400 hover:text-white'}`}>
+                All ({alerts.length})
+              </button>
+              <button 
+                onClick={() => setSeverityFilter("Critical")}
+                className={`px-3.5 py-1.5 rounded-xl font-bold transition-all ${severityFilter === 'Critical' ? 'bg-white text-black shadow-md' : 'border border-cisco-border text-slate-400 hover:text-white'}`}>
+                Critical
+              </button>
+              <button 
+                onClick={() => setSeverityFilter("Warning")}
+                className={`px-3.5 py-1.5 rounded-xl font-bold transition-all ${severityFilter === 'Warning' ? 'bg-white text-black shadow-md' : 'border border-cisco-border text-slate-400 hover:text-white'}`}>
+                Warning
+              </button>
+            </div>
+
+            <span className="text-slate-500 text-[11px] hidden sm:block">Automated SLA Threshold Engine</span>
+          </div>
+
+          <div className="space-y-3">
+            {filteredAlerts.length === 0 ? (
+              <div className="p-12 rounded-2xl bg-cisco-surface border border-cisco-border text-center text-slate-400 font-mono text-xs">
+                <Icon name="check-circle" className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+                All telemetry metrics operating within nominal SLA limits. No active alerts.
+              </div>
+            ) : (
+              filteredAlerts.map(a => (
+                <div key={a.id} className="p-4 rounded-xl bg-cisco-surface border border-cisco-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono hover:border-slate-600 transition-all">
+                  <div className="flex items-start gap-3">
+                    <span className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${a.severity === 'Critical' ? 'bg-rose-500 animate-ping' : 'bg-amber-400'}`}></span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-sm">{a.device_id}</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${a.severity === 'Critical' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+                          {a.severity}
+                        </span>
+                        <span className="text-slate-500 text-[10px]">{a.id}</span>
+                      </div>
+                      <p className="text-slate-300 text-xs mt-1">{a.message}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-[11px] text-slate-400 self-end sm:self-center shrink-0">
+                    <div>Value: <span className="text-white font-bold">{a.value}</span></div>
+                    <div>Threshold: <span className="text-amber-400">{a.threshold}</span></div>
+                    <span className="text-slate-500">{a.timestamp?.slice(11, 19)} UTC</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // --- PAGE 7: ARCHITECTURE PAGE ---
+    function ArchitecturePage() {
+      const stages = [
+        {
+          num: "01",
+          title: "Network Elements",
+          sub: "Cisco, Juniper, Arista routers & switches",
+          desc: "Hardware ASIC & control planes expose live operational telemetry through YANG model datastores."
+        },
+        {
+          num: "02",
+          title: "YANG-Push Subscription",
+          sub: "RFC 8641 Dial-Out / Dial-In",
+          desc: "Device pushes periodic datastore snapshots or on-change notifications over HTTP/2, gRPC or WebSocket."
+        },
+        {
+          num: "03",
+          title: "Telemetry Collector",
+          sub: "High-Throughput Ingestion Queue",
+          desc: "Receives raw RFC 7951 JSON or Protobuf payload buffers without blocking the device pipeline."
+        },
+        {
+          num: "04",
+          title: "Schema Validator",
+          sub: "RFC 7950 Semantic Engine",
+          desc: "Verifies type fidelity, mandatory keys, numeric bounds, and regex constraints. Catches firmware schema drift."
+        },
+        {
+          num: "05",
+          title: "Dual Storage Routing",
+          sub: "Clean DB & Dead-Letter Queue",
+          desc: "Clean records persist to TimescaleDB/ClickHouse; malformed packets isolate in DLQ quarantine."
+        },
+        {
+          num: "06",
+          title: "AIOps Analytics Engine",
+          sub: "Heuristic Anomaly Detection",
+          desc: "Detects metric deviations, predicts link saturation, and explains root cause in natural language."
+        },
+        {
+          num: "07",
+          title: "Observability Dashboard",
+          sub: "NOC & Engineering View",
+          desc: "Visualizes latency, CPU, and packet loss trends across multi-vendor networks in real-time."
+        },
+        {
+          num: "08",
+          title: "Autonomous Alerting",
+          sub: "SLA Threshold Breaches",
+          desc: "Triggers incident notifications, PagerDuty webhooks, and automatic remediation playbooks."
+        }
+      ];
+
+      return (
+        <div className="space-y-8 pb-16">
+          <div>
+            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              <Icon name="git-merge" className="w-6 h-6 text-cisco-cyan" />
+              Pipeline Architecture & Execution Flow
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">End-to-end telemetry lifecycle from device silicon to SLA automated triggers.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {stages.map((st) => (
+              <div key={st.num} className="p-6 rounded-2xl bg-cisco-surface border border-cisco-border relative flex flex-col justify-between hover:border-cisco-cyan/60 transition-all group">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xl font-extrabold font-mono text-cisco-cyan">{st.num}</span>
+                    <span className="text-[10px] font-mono text-slate-500 uppercase">Stage</span>
+                  </div>
+                  <h3 className="font-bold text-white text-base group-hover:text-cisco-cyan transition-colors">{st.title}</h3>
+                  <div className="text-xs font-mono text-cisco-accent mt-0.5">{st.sub}</div>
+                  <p className="text-xs text-slate-300 mt-3 leading-relaxed">{st.desc}</p>
+                </div>
+                <div className="pt-4 mt-4 border-t border-cisco-border/60 flex items-center justify-between text-[10px] font-mono text-slate-500">
+                  <span>RFC Compliance</span>
+                  <span className="text-emerald-400">Deterministic</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // --- PAGE 8: ANALYTICS PAGE ---
+    function AnalyticsPage() {
+      const { devices } = useContext(AppContext);
+
+      return (
+        <div className="space-y-6 pb-16">
+          <div>
+            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+              <Icon name="bar-chart-3" className="w-6 h-6 text-cisco-cyan" />
+              Network Telemetry Analytics & Trends
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">Aggregate utilization, link saturation trajectories, and network health benchmarks.</p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <span className="text-xs font-mono text-slate-400">Network Health Score</span>
+              <div className="text-3xl font-extrabold font-mono text-emerald-400 mt-2">96.2%</div>
+              <div className="text-[11px] text-slate-400 mt-1 font-mono">Weighted Fabric Reliability</div>
+            </div>
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <span className="text-xs font-mono text-slate-400">Peak Cluster Memory</span>
+              <div className="text-3xl font-extrabold font-mono text-white mt-2">78.4%</div>
+              <div className="text-[11px] text-slate-400 mt-1 font-mono">Max recorded on Router-01</div>
+            </div>
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <span className="text-xs font-mono text-slate-400">Aggregated Traffic</span>
+              <div className="text-3xl font-extrabold font-mono text-cisco-cyan mt-2">1,840 Mbps</div>
+              <div className="text-[11px] text-slate-400 mt-1 font-mono">Concurrent Stream Volume</div>
+            </div>
+            <div className="p-5 rounded-2xl bg-cisco-surface border border-cisco-border">
+              <span className="text-xs font-mono text-slate-400">Avg Packet Loss</span>
+              <div className="text-3xl font-extrabold font-mono text-white mt-2">0.03%</div>
+              <div className="text-[11px] text-emerald-400 mt-1 font-mono">Well within 0.1% SLA</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="p-6 rounded-2xl bg-cisco-surface border border-cisco-border space-y-4">
+              <h3 className="font-bold text-white text-sm">Top Bandwidth-Consuming Nodes</h3>
+              <div className="space-y-3 font-mono text-xs">
+                {devices.map(dev => (
+                  <div key={dev.device_id} className="space-y-1">
+                    <div className="flex justify-between text-slate-300">
+                      <span>{dev.device_id} ({dev.vendor})</span>
+                      <span className="font-bold text-white">520 Mbps</span>
+                    </div>
+                    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                      <div className="bg-gradient-to-r from-cisco-blue to-cisco-cyan h-2 rounded-full" style={{ width: '65%' }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-cisco-surface border border-cisco-border space-y-4">
+              <h3 className="font-bold text-white text-sm">Schema Conformance Benchmark</h3>
+              <div className="p-4 rounded-xl bg-cisco-navy border border-cisco-border space-y-3 font-mono text-xs">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Valid Telemetry Ratio:</span>
+                  <span className="text-emerald-400 font-bold">81.2%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Quarantined Schema Drift:</span>
+                  <span className="text-rose-400 font-bold">18.8%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Avg Validation Latency:</span>
+                  <span className="text-cisco-cyan font-bold">1.4ms</span>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                By performing schema inspection in-line, the platform successfully quarantined 18.8% of corrupted telemetry, protecting timeseries storage from null values and index fragmentation.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- PAGE 9: ABOUT PAGE ---
+    function AboutPage() {
+      return (
+        <div className="space-y-8 pb-16 max-w-4xl">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+              <Icon name="book-open" className="w-7 h-7 text-cisco-cyan" />
+              About the Project: Schema-Validated YANG-Push Pipeline
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 mt-2 leading-relaxed">
+              Academic & industry reference guide for modern model-driven network observability.
+            </p>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-cisco-surface border border-cisco-border space-y-4">
+            <h2 className="text-lg font-bold text-white">What is YANG? (RFC 7950)</h2>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              <strong>YANG</strong> (Yet Another Next Generation) is the IETF standard data modeling language for network configuration and state. Unlike freeform text CLI or obscure SNMP MIBs, YANG defines unambiguous hierarchical data trees with strict data typing, range limits, and mandatory keys.
+            </p>
+            <h2 className="text-lg font-bold text-white pt-2">What is YANG-Push? (RFC 8639 / RFC 8641)</h2>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              YANG-Push establishes subscriptions on network devices that push telemetry data continuously or when specific on-change events trigger. This eliminates the polling tax of SNMP and provides near-zero latency insight into network state.
+            </p>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-cisco-surface border border-cisco-border space-y-4">
+            <h2 className="text-lg font-bold text-white">Why Schema Validation? (SNMP vs YANG-Push)</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs font-mono text-left">
+                <thead className="bg-cisco-navy text-slate-400 border-b border-cisco-border">
+                  <tr>
+                    <th className="py-2.5 px-4">Dimension</th>
+                    <th className="py-2.5 px-4 text-rose-300">Traditional SNMP Polling</th>
+                    <th className="py-2.5 px-4 text-cisco-cyan">YANG-Push + Schema Validation</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-cisco-border text-slate-300">
+                  <tr>
+                    <td className="py-3 px-4 font-bold text-white">Architecture</td>
+                    <td className="py-3 px-4">Pull-based (periodic get-requests)</td>
+                    <td className="py-3 px-4 font-bold text-emerald-400">Push-based (event & periodic streams)</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 font-bold text-white">Data Modeling</td>
+                    <td className="py-3 px-4">SMIv2 MIBs (rigid, flat, vendor-inconsistent)</td>
+                    <td className="py-3 px-4 font-bold text-emerald-400">Standard YANG modules (OpenConfig / IETF)</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 font-bold text-white">CPU Overhead</td>
+                    <td className="py-3 px-4">High device CPU spikes during polling</td>
+                    <td className="py-3 px-4 font-bold text-emerald-400">Minimal hardware ASIC streaming</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 font-bold text-white">Schema Conformance</td>
+                    <td className="py-3 px-4">None; parses freeform strings</td>
+                    <td className="py-3 px-4 font-bold text-emerald-400">Strict in-line semantic validation</td>
+                  </tr>
+                  <tr>
+                    <td className="py-3 px-4 font-bold text-white">AIOps Readiness</td>
+                    <td className="py-3 px-4">Poor (missing timestamps, clock skew)</td>
+                    <td className="py-3 px-4 font-bold text-emerald-400">Pristine, synchronized time-series</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-cisco-surface border border-cisco-border space-y-4">
+            <h2 className="text-lg font-bold text-white">Real-World Telecom & Cloud Monitoring Use Cases</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300">
+              <div className="p-4 rounded-xl bg-cisco-navy border border-cisco-border space-y-1.5">
+                <div className="font-bold text-cisco-cyan text-sm">5G Core Network Slicing</div>
+                <p>Ensures that SLA packet loss and jitter metrics streamed by user-plane functions conform to carrier QoS models.</p>
+              </div>
+              <div className="p-4 rounded-xl bg-cisco-navy border border-cisco-border space-y-1.5">
+                <div className="font-bold text-cisco-cyan text-sm">Hyperscale Cloud Spine Fabric</div>
+                <p>Isolates telemetry corruption during rolling firmware upgrades across tens of thousands of leaf-spine switches.</p>
+              </div>
+              <div className="p-4 rounded-xl bg-cisco-navy border border-cisco-border space-y-1.5">
+                <div className="font-bold text-cisco-cyan text-sm">Subsea Optical Cable Monitoring</div>
+                <p>Validates optical signal-to-noise ratio (OSNR) and pre-FEC bit error rates in real-time.</p>
+              </div>
+              <div className="p-4 rounded-xl bg-cisco-navy border border-cisco-border space-y-1.5">
+                <div className="font-bold text-cisco-cyan text-sm">Automated AIOps Incident Remediation</div>
+                <p>Feeds clean, validated telemetry to machine learning models to prevent hallucinations and false positive alerts.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+
+    // ==========================================
+    // LOGIN / AUTHENTICATION PAGE
+    // ==========================================
+    // ==========================================
+    // LOGIN / AUTHENTICATION PAGE (PIXEL-PERFECT REPLICA)
+    // ==========================================
+    // ==========================================
+    // LOGIN / AUTHENTICATION PAGE (BLACK BG + WHITE BUTTONS)
+    // ==========================================
+    function LoginPage() {
+      const { login } = useContext(AppContext);
+      const [authMode, setAuthMode] = useState("signin");
+      const [email, setEmail] = useState("admin@telemetry.noc");
+      const [password, setPassword] = useState("password123");
+      const [showPassword, setShowPassword] = useState(false);
+      const [selectedRole, setSelectedRole] = useState("Admin");
+      const [isSubmitting, setIsSubmitting] = useState(false);
+
+      const handleSubmit = (e) => {
+        if (e) e.preventDefault();
+        setIsSubmitting(true);
+        setTimeout(() => {
+          login(email, password, selectedRole);
+          setIsSubmitting(false);
+        }, 350);
+      };
+
+      const handleQuickDemo = (roleType, emailPrefill, namePrefill) => {
+        setEmail(emailPrefill);
+        setSelectedRole(roleType);
+        setIsSubmitting(true);
+        setTimeout(() => {
+          login(emailPrefill, "secret123", roleType, namePrefill);
+          setIsSubmitting(false);
+        }, 250);
+      };
+
+      return (
+        <div className="min-h-screen bg-black flex items-center justify-center p-4 sm:p-6 font-sans antialiased relative overflow-hidden telemetry-grid selection:bg-white selection:text-black">
+          {/* Subtle Ambient Radial Lighting */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-gradient-to-b from-cisco-cyan/10 via-cisco-blue/5 to-transparent blur-3xl pointer-events-none -z-10"></div>
+
+          {/* High-Contrast Card with Dark Surface */}
+          <div className="w-full max-w-[440px] bg-[#0A101F] border border-slate-800 rounded-[32px] p-8 sm:p-10 shadow-2xl shadow-cyan-950/20 text-white relative backdrop-blur-xl">
+            
+            {/* Top Shield Icon in soft dark container with crisp white icon */}
+            <div className="w-16 h-16 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <svg 
+                className="w-8 h-8 text-white" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2.2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
+
+            {/* Title & Subtitle */}
+            <div className="text-center mb-7">
+              <h1 className="text-2xl sm:text-[26px] font-extrabold text-white tracking-tight leading-tight">
+                Sign In to YANG-Push Telemetry
+              </h1>
+              <p className="text-xs sm:text-[13px] text-slate-400 mt-2 font-normal leading-relaxed">
+                Schema-Validated RFC 8641 Telemetry Pipeline & Anomaly Defense
+              </p>
+            </div>
+
+            {/* Segmented Tab Switcher with White Active Button */}
+            <div className="bg-[#040812] p-1.5 rounded-2xl flex items-center mb-6 border border-slate-800/90">
+              <button
+                type="button"
+                onClick={() => setAuthMode("signin")}
+                className={`flex-1 py-2.5 px-4 text-xs sm:text-sm font-bold rounded-xl transition-all text-center ${
+                  authMode === "signin"
+                    ? "bg-white text-black shadow-lg shadow-white/10"
+                    : "text-slate-400 hover:text-white"
+                }`}>
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthMode("create")}
+                className={`flex-1 py-2.5 px-4 text-xs sm:text-sm font-bold rounded-xl transition-all text-center ${
+                  authMode === "create"
+                    ? "bg-white text-black shadow-lg shadow-white/10"
+                    : "text-slate-400 hover:text-white"
+                }`}>
+                Create Account
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              
+              {/* EMAIL ADDRESS */}
+              <div className="space-y-1.5 text-left">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  EMAIL ADDRESS
+                </label>
+                <div className="relative rounded-2xl border border-slate-800 bg-[#040812] focus-within:border-white focus-within:ring-2 focus-within:ring-white/20 transition-all">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Icon name="mail" className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    className="w-full pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 bg-transparent outline-none font-normal rounded-2xl font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* PASSWORD */}
+              <div className="space-y-1.5 text-left pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    PASSWORD
+                  </label>
+                  <a 
+                    href="#forgot" 
+                    onClick={(e) => { e.preventDefault(); alert("Password reset link dispatched to " + email); }}
+                    className="text-xs font-semibold text-slate-300 hover:text-white transition-colors">
+                    Forgot password?
+                  </a>
+                </div>
+                <div className="relative rounded-2xl border border-slate-800 bg-[#040812] focus-within:border-white focus-within:ring-2 focus-within:ring-white/20 transition-all">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Icon name="key" className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    className="w-full pl-10 pr-11 py-3 text-sm text-white placeholder-slate-500 bg-transparent outline-none font-normal rounded-2xl font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white transition-colors">
+                    <Icon name={showPassword ? "eye-off" : "eye"} className="w-4 h-4 text-slate-400" />
+                  </button>
+                </div>
+              </div>
+
+              {/* White Submit Button with Black Text */}
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-3.5 rounded-2xl bg-white hover:bg-slate-200 active:scale-[0.99] text-black font-extrabold text-sm shadow-xl shadow-white/10 flex items-center justify-center gap-2 mt-6 transition-all">
+                {isSubmitting ? (
+                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <>
+                    <span>{authMode === "signin" ? "Sign In" : "Create Account"}</span>
+                    <span className="text-base font-black leading-none">→</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Instant Demo Access (All White Buttons) */}
+            <div className="mt-7 pt-5 border-t border-slate-800 text-center">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-2.5 font-semibold">
+                Instant Demo Access:
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleQuickDemo("Admin", "admin@telemetry.noc", "Alex Rivera (NOC Lead)")}
+                  className="px-3.5 py-1.5 rounded-xl bg-white text-black font-bold hover:bg-slate-200 shadow-md transition-all text-xs flex items-center gap-1">
+                  <span>👑</span> Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickDemo("Engineer", "engineer@telemetry.noc", "Jordan Chen (Engineer)")}
+                  className="px-3.5 py-1.5 rounded-xl bg-white text-black font-bold hover:bg-slate-200 shadow-md transition-all text-xs flex items-center gap-1">
+                  <span>⚡</span> Engineer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickDemo("Viewer", "auditor@telemetry.noc", "Taylor Vance (Auditor)")}
+                  className="px-3.5 py-1.5 rounded-xl bg-white text-black font-bold hover:bg-slate-200 shadow-md transition-all text-xs flex items-center gap-1">
+                  <span>👁️</span> Viewer
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      );
+    }
+
+
+    // ==========================================
+    // SHARE / OPEN ON ANY DEVICE MODAL
+    // ==========================================
+    function ShareModal() {
+      const { showShareModal, setShowShareModal, addToast } = useContext(AppContext);
+      const [lanIp, setLanIp] = useState("192.168.1.60");
+      const [copied, setCopied] = useState(false);
+
+      if (!showShareModal) return null;
+
+      const lanUrl = `http://${lanIp}:8080`;
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(lanUrl)}&color=00D2FF&bgcolor=060B14`;
+
+      const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        addToast("success", "Link Copied!", "Copied address to clipboard.");
+        setTimeout(() => setCopied(false), 2000);
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0A101F] border border-slate-700 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl shadow-cyan-950/40 relative text-left">
+            <button 
+              onClick={() => setShowShareModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-lg">
+              <Icon name="x" className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-2xl bg-white text-black flex items-center justify-center font-bold shadow-md">
+                <Icon name="share-2" className="w-5 h-5 text-black" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-white text-lg tracking-tight">Open on Any Device & Network</h3>
+                <p className="text-xs text-slate-400">Mobile phones, tablets, laptops, and remote networks</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs font-mono">
+              {/* Method 1: Local Wi-Fi QR Code */}
+              <div className="p-4 rounded-2xl bg-[#040812] border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between text-white font-bold">
+                  <span className="flex items-center gap-2">
+                    <Icon name="smartphone" className="w-4 h-4 text-cisco-cyan" />
+                    1. Same Wi-Fi Network (Phone / Tablet)
+                  </span>
+                  <span className="text-[10px] text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
+                    INSTANT QR SCAN
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 pt-1">
+                  <div className="p-2 rounded-xl bg-black border border-slate-800 shrink-0 shadow-md">
+                    <img 
+                      src={qrApiUrl} 
+                      alt="Scan to open on phone" 
+                      className="w-28 h-28 rounded-lg"
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  </div>
+                  <div className="space-y-2 text-left flex-1">
+                    <p className="text-slate-300 text-[11px] font-sans">
+                      Connect your phone to the same Wi-Fi, open your Camera app, and scan the QR code to open the dashboard instantly:
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="text" 
+                        readOnly 
+                        value={lanUrl}
+                        className="bg-black border border-slate-800 rounded-lg px-3 py-1.5 text-cisco-cyan text-xs w-full font-bold focus:outline-none"
+                      />
+                      <button
+                        onClick={() => copyToClipboard(lanUrl)}
+                        className="px-3 py-1.5 bg-white text-black font-extrabold rounded-lg hover:bg-slate-200 transition-all shrink-0">
+                        {copied ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Method 2: Global Public Access (Any Network Worldwide) */}
+              <div className="p-4 rounded-2xl bg-[#040812] border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between text-white font-bold">
+                  <span className="flex items-center gap-2">
+                    <Icon name="globe" className="w-4 h-4 text-cisco-cyan" />
+                    2. Any Network Worldwide (Cellular 4G/5G / Remote)
+                  </span>
+                  <span className="text-[10px] text-cisco-cyan bg-cyan-950/40 px-2 py-0.5 rounded border border-cisco-cyan/30">
+                    PUBLIC HTTPS TUNNEL
+                  </span>
+                </div>
+                <p className="text-slate-300 text-[11px] font-sans leading-relaxed">
+                  Want to share with judges or open over mobile data outside your Wi-Fi? Double-click <strong className="text-white">share_public.bat</strong> in your project folder.
+                </p>
+                <div className="p-2.5 rounded-xl bg-black border border-slate-800 text-[11px] text-slate-300">
+                  <span className="text-slate-500">$</span> ssh -R 80:localhost:8080 nokey@localhost.run
+                </div>
+                <p className="text-slate-400 text-[10px] font-sans">
+                  Instantly provides a global public HTTPS link (e.g. <span className="text-cisco-cyan">https://your-pipeline.lhrtunnel.link</span>) accessible on any device on Earth with zero setup.
+                </p>
+              </div>
+
+              {/* Method 3: 24/7 Permanent Free Cloud Deploy */}
+              <div className="p-4 rounded-2xl bg-[#040812] border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-white font-bold">
+                  <span className="flex items-center gap-2">
+                    <Icon name="zap" className="w-4 h-4 text-emerald-400" />
+                    3. Permanent 24/7 Free Cloud Hosting
+                  </span>
+                  <span className="text-[10px] text-slate-400">NETLIFY / GITHUB</span>
+                </div>
+                <p className="text-slate-300 text-[11px] font-sans">
+                  The frontend is completely self-contained in <strong className="text-white">index.html</strong>. Drag-and-drop the project folder to <a href="https://app.netlify.com/drop" target="_blank" className="text-cisco-cyan hover:underline font-bold">app.netlify.com/drop</a> for a permanent free URL!
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button 
+                onClick={() => setShowShareModal(false)}
+                className="px-6 py-2.5 rounded-xl bg-white text-black font-extrabold text-xs hover:bg-slate-200 shadow-md transition-all">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // --- MAIN APP WRAPPER ---
+    function App() {
+      const { activePage, isAuthenticated } = useContext(AppContext);
+
+      if (!isAuthenticated) {
+        return (
+          <>
+            <LoginPage />
+            <ToastContainer />
+          </>
+        );
+      }
+
+      return (
+        <div className="flex flex-col min-h-screen">
+          <Header />
+          <div className="flex flex-1">
+            <Sidebar />
+            <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
+              {activePage === "home" && <HomePage />}
+              {activePage === "dashboard" && <DashboardPage />}
+              {activePage === "stream" && <StreamPage />}
+              {activePage === "validation" && <ValidationPage />}
+              {activePage === "devices" && <DevicesPage />}
+              {activePage === "alerts" && <AlertsPage />}
+              {activePage === "architecture" && <ArchitecturePage />}
+              {activePage === "analytics" && <AnalyticsPage />}
+              {activePage === "about" && <AboutPage />}
+            </main>
+          </div>
+          <MobileNav />
+          <ToastContainer />
+          <AiAnomalyModal />
+          <ShareModal />
+        </div>
+      );
+    }
+
+    // Mount Application cleanly
+    const rootEl = document.getElementById('root');
+    const root = ReactDOM.createRoot(rootEl);
+    root.render(
+      <AppProvider>
+        <App />
+      </AppProvider>
+    );
+    rootEl.setAttribute('data-mounted', 'true');
+  </script>
+</body>
+</html>
